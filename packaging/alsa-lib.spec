@@ -5,7 +5,7 @@ License:        LGPL-2.0+
 Summary:        The Advanced Linux Sound Architecture (ALSA) library
 Url:            http://www.alsa-project.org/
 Group:          System/Libraries
-Source0:        ftp://ftp.alsa-project.org/pub/lib/%{name}-%{version}.tar.gz
+Source0:        ftp://ftp.alsa-project.org/pub/lib/%{name}-%{version}.tar.bz2
 
 %description
 The Advanced Linux Sound Architecture (ALSA) provides audio and MIDI
