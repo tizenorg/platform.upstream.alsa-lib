@@ -4,7 +4,7 @@ Release:        1
 License:        LGPL-2.0+
 Summary:        The Advanced Linux Sound Architecture (ALSA) library
 Url:            http://www.alsa-project.org/
-Group:          System/Libraries
+Group:          System/Audio
 Source0:        ftp://ftp.alsa-project.org/pub/lib/%{name}-%{version}.tar.bz2
 
 %description
@@ -17,7 +17,7 @@ the older OSS API, providing binary compatibility for most OSS programs.
 
 %package -n libasound
 Summary:        ALSA Library package for multimedia framework middleware package
-Group:          Development/Libraries
+Group:          System/Libraries
 
 %description -n libasound
 ALSA Library package for multimedia framework middleware package
@@ -58,6 +58,7 @@ rm -f %{buildroot}/%{_bindir}/aserver
 
 %files -n libasound
 %defattr(-,root,root,-)
+%license COPYING
 %{_libdir}/lib*.so.*
 %{_libdir}/alsa-lib/smixer/*.so
 %{_datadir}/alsa/*
