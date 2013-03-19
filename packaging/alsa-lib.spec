@@ -17,7 +17,7 @@ the older OSS API, providing binary compatibility for most OSS programs.
 
 %package -n libasound
 Summary:        ALSA Library package for multimedia framework middleware package
-Group:          System/Libraries
+Group:          System/Audio
 
 %description -n libasound
 ALSA Library package for multimedia framework middleware package
