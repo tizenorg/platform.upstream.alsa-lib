@@ -6,6 +6,7 @@ Summary:        The Advanced Linux Sound Architecture (ALSA) library
 Url:            http://www.alsa-project.org/
 Group:          System/Audio
 Source0:        ftp://ftp.alsa-project.org/pub/lib/%{name}-%{version}.tar.bz2
+Source1001: 	alsa-lib.manifest
 
 %description
 The Advanced Linux Sound Architecture (ALSA) provides audio and MIDI
@@ -32,6 +33,7 @@ ALSA Library package for multimedia framework middleware package
 
 %prep
 %setup -q
+cp %{SOURCE1001} .
 
 
 %build
@@ -57,6 +59,7 @@ rm -f %{buildroot}/%{_bindir}/aserver
 
 
 %files -n libasound
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 %license COPYING
 %{_libdir}/lib*.so.*
@@ -64,6 +67,7 @@ rm -f %{buildroot}/%{_bindir}/aserver
 %{_datadir}/alsa/*
 
 %files -n libasound-devel
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 %{_includedir}/*
 %{_libdir}/lib*.so
