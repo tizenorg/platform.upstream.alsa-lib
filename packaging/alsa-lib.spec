@@ -44,7 +44,7 @@ cp %{SOURCE1001} .
     --disable-rawmidi \
     --disable-python \
     --with-gnu-ld \
-    --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug
+    --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug,empty,hooks,route,multi,softvol,file,iec958,null,shm
 
 make %{?_smp_mflags}
 
