@@ -41,7 +41,6 @@ cp %{SOURCE1001} .
     --with-alsa-devdir=/dev/snd \
     --disable-alisp \
     --disable-seq \
-    --disable-rawmidi \
     --disable-python \
     --with-gnu-ld \
     --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug,empty,hooks,route,multi,softvol,file,iec958,null,shm
