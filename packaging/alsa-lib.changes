@@ -1,3 +1,6 @@
+* Thu Feb 13 2014 Jaska Uimonen <jaska.uimonen@intel.com>
+- Fixes TIVI-2685 by enabling raw midi
+
 * Tue Jul 30 2013 Patrick McCarty <patrick.mccarty@linux.intel.com> f543a9a
 - (TIVI-1021, TZPC-3027) Build all PCM plugins referenced by conf files
 
