@@ -1,7 +1,8 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.59)
-AC_INIT(src/control/control.c)
+AC_INIT(alsa-lib, 1.0.28)
 
+AC_CONFIG_SRCDIR([src/control/control.c])
 AC_CONFIG_MACRO_DIR([m4])
 
 dnl *************************************************
@@ -12,10 +13,12 @@ dnl add API = c+1:0:a+1
 dnl remove API = c+1:0:0
 dnl *************************************************
 AC_CANONICAL_HOST
-AM_INIT_AUTOMAKE(alsa-lib, 1.0.25)
+AM_INIT_AUTOMAKE
 eval LIBTOOL_VERSION_INFO="2:0:0"
 dnl *************************************************
-AM_CONDITIONAL(INSTALL_M4, test -n "${ACLOCAL}")
+AM_CONDITIONAL([INSTALL_M4], [test -n "${ACLOCAL}"])
+
+AM_MAINTAINER_MODE([enable])
 
 # Test for new silent rules and enable only if they are available
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -31,7 +34,7 @@ then
 
   which ${program_prefix}gcc >/dev/null 2>&1 && CC=${program_prefix}gcc
   which ${host_cpu}-${host_os}-gcc >/dev/null 2>&1 \
-  && CC=${host_cpu}-${host-os}-gcc
+  && CC=${host_cpu}-${host_os}-gcc
   which ${host_cpu}-${host_vendor}-${host_os}-gcc >/dev/null 2>&1 \
   && CC=${host_cpu}-${host_vendor}-${host_os}-gcc
 
@@ -53,7 +56,7 @@ CC_NOUNDEFINED
 
 dnl Checks for header files.
 AC_HEADER_STDC
-AM_CONFIG_HEADER(include/config.h)
+AC_CONFIG_HEADERS(include/config.h)
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -62,8 +65,6 @@ AC_HEADER_TIME
 
 dnl Checks for library functions.
 AC_PROG_GCC_TRADITIONAL
-AC_CHECK_FUNC([hsearch_r], [HAVE_HSEARCH_R=yes])
-AM_CONDITIONAL(ALSA_HSEARCH_R, [test "x$HAVE_HSEARCH_R" != xyes])
 AC_CHECK_FUNCS([uselocale])
 
 SAVE_LIBRARY_VERSION
@@ -161,7 +162,7 @@ if test "$versioned" = "yes"; then
 else
   AC_MSG_RESULT(no)
 fi
-AM_CONDITIONAL(VERSIONED_SYMBOLS, test x$versioned = xyes)
+AM_CONDITIONAL([VERSIONED_SYMBOLS], [test x$versioned = xyes])
 
 dnl Check for symbolic-functions
 AC_MSG_CHECKING(for symbolic-functions)
@@ -179,7 +180,7 @@ if test "$symfuncs" = "yes"; then
 else
   AC_MSG_RESULT(no)
 fi
-AM_CONDITIONAL(SYMBOLIC_FUNCTIONS, test x"$symfuncs" = xyes)
+AM_CONDITIONAL([SYMBOLIC_FUNCTIONS], [test x"$symfuncs" = xyes])
 
 dnl See if toolchain has a custom prefix for symbols ...
 AC_MSG_CHECKING(for custom symbol prefixes)
@@ -254,6 +255,7 @@ AC_MSG_CHECKING(for libdl)
 AC_ARG_WITH(libdl,
   AS_HELP_STRING([--with-libdl], [Use libdl for plugins (default = yes)]),
   [ have_libdl="$withval" ], [ have_libdl="yes" ])
+HAVE_LIBDL=
 if test "$have_libdl" = "yes"; then
   AC_CHECK_LIB([dl], [dlsym], [HAVE_LIBDL="yes"])
   if test "$HAVE_LIBDL" = "yes" ; then
@@ -263,7 +265,7 @@ if test "$have_libdl" = "yes"; then
 else
   AC_MSG_RESULT(no)
 fi
-AM_CONDITIONAL(BUILD_MODULES, test "$HAVE_LIBDL"="yes")
+AM_CONDITIONAL([BUILD_MODULES], [test "$HAVE_LIBDL" = "yes"])
 
 dnl Check for pthread
 AC_MSG_CHECKING(for pthread)
@@ -279,6 +281,16 @@ if test "$have_pthread" = "yes"; then
 else
   AC_MSG_RESULT(no)
 fi
+
+dnl Check for __thread
+AC_MSG_CHECKING([for __thread])
+AC_LINK_IFELSE([AC_LANG_PROGRAM([#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__)) && ((__GNUC__ < 4) || (__GNUC__ == 4 && __GNUC_MINOR__ < 1) || (__GNUC__ == 4 && __GNUC_MINOR__ == 1 && __GNUC_PATCHLEVEL__ < 2))
+#error gcc has this bug: http://gcc.gnu.org/ml/gcc-bugs/2006-09/msg02275.html
+#endif], [static __thread int p = 0])],
+[AC_DEFINE(HAVE___THREAD, 1,
+Define to 1 if compiler supports __thread)
+AC_MSG_RESULT([yes])],
+[AC_MSG_RESULT([no])])
 
 dnl Check for librt
 AC_MSG_CHECKING(for librt)
@@ -298,42 +310,8 @@ fi
 
 AC_SUBST(ALSA_DEPLIBS)
 
-dnl Check for architecture
-AC_MSG_CHECKING(for architecture)
-case "$host" in
-i?86*)
-  AC_MSG_RESULT(x86)
-  ;;
-x86_64*)
-  AC_MSG_RESULT(x86)
-  ;;
-alpha*)
-  AC_MSG_RESULT(alpha)
-  ;;
-powerpc*|ppc*)
-  AC_MSG_RESULT(ppc)
-  CPPFLAGS="$CPPFLAGS -D__ppc__"
-  ;;
-ia64*)
-  AC_MSG_RESULT(ia64)
-  CPPFLAGS="$CPPFLAGS -D__ia64__"
-  ;;
-mips*)
-  AC_MSG_RESULT(mips)
-  CPPFLAGS="$CPPFLAGS -D__mips__"
-  ;;
-arm*)
-  AC_MSG_RESULT(arm)
-  CPPFLAGS="$CPPFLAGS -D__arm__"
-  ;;
-*)
-  AC_MSG_RESULT($host_cpu)
-  echo "No atomic operations supported.." 
-  ;;
-esac
-
-dnl Check for wordexp.h
-AC_CHECK_HEADERS([wordexp.h])
+dnl Check for headers
+AC_CHECK_HEADERS([wordexp.h endian.h sys/endian.h])
 
 dnl Check for resmgr support...
 AC_MSG_CHECKING(for resmgr support)
@@ -409,7 +387,7 @@ test "$softfloat" = "yes" && build_alisp="no"
 AC_ARG_ENABLE(old-symbols,
   AS_HELP_STRING([--disable-old-symbols], [disable old obsoleted symbols]),
   [keep_old_symbols="$enableval"], [keep_old_symbols="yes"])
-AM_CONDITIONAL(KEEP_OLD_SYMBOLS, test x$keep_old_symbols = xyes)
+AM_CONDITIONAL([KEEP_OLD_SYMBOLS], [test x$keep_old_symbols = xyes])
 
 AC_ARG_ENABLE(python,
   AS_HELP_STRING([--disable-python], [disable the python components]),
@@ -438,14 +416,14 @@ fi
 AC_SUBST(PYTHON_LIBS)
 AC_SUBST(PYTHON_INCLUDES)
 
-AM_CONDITIONAL(BUILD_MIXER, test x$build_mixer = xyes)
-AM_CONDITIONAL(BUILD_PCM, test x$build_pcm = xyes)
-AM_CONDITIONAL(BUILD_RAWMIDI, test x$build_rawmidi = xyes)
-AM_CONDITIONAL(BUILD_HWDEP, test x$build_hwdep = xyes)
-AM_CONDITIONAL(BUILD_SEQ, test x$build_seq = xyes)
-AM_CONDITIONAL(BUILD_UCM, test x$build_ucm = xyes)
-AM_CONDITIONAL(BUILD_ALISP, test x$build_alisp = xyes)
-AM_CONDITIONAL(BUILD_PYTHON, test x$build_python = xyes)
+AM_CONDITIONAL([BUILD_MIXER], [test x$build_mixer = xyes])
+AM_CONDITIONAL([BUILD_PCM], [test x$build_pcm = xyes])
+AM_CONDITIONAL([BUILD_RAWMIDI], [test x$build_rawmidi = xyes])
+AM_CONDITIONAL([BUILD_HWDEP], [test x$build_hwdep = xyes])
+AM_CONDITIONAL([BUILD_SEQ], [test x$build_seq = xyes])
+AM_CONDITIONAL([BUILD_UCM], [test x$build_ucm = xyes])
+AM_CONDITIONAL([BUILD_ALISP], [test x$build_alisp = xyes])
+AM_CONDITIONAL([BUILD_PYTHON], [test x$build_python = xyes])
 
 if test "$build_mixer" = "yes"; then
   AC_DEFINE([BUILD_MIXER], "1", [Build mixer component])
@@ -476,6 +454,21 @@ AC_ARG_WITH(pcm-plugins,
 else
 pcm_plugins=""
 fi
+
+dnl check atomics for pcm_meter
+
+AC_MSG_CHECKING([whether GCC supports builtin atomic intrinsics])
+if test -z "$gcc_have_atomics"; then
+  gcc_have_atomics=no
+  AC_TRY_LINK([],
+    [int i;
+     __atomic_load_n(&i, __ATOMIC_SEQ_CST);
+     __atomic_add_fetch(&i, 0, __ATOMIC_SEQ_CST);
+    ],
+    [gcc_have_atomics=yes],
+    [gcc_have_atomics=no])
+fi
+AC_MSG_RESULT($gcc_have_atomics)
 
 PCM_PLUGIN_LIST="copy linear route mulaw alaw adpcm rate plug multi shm file null empty share meter hooks lfloat ladspa dmix dshare dsnoop asym iec958 softvol extplug ioplug mmap_emul"
 
@@ -520,34 +513,38 @@ if test "$softfloat" = "yes"; then
   build_pcm_ladspa="no"
 fi
 
-AM_CONDITIONAL(BUILD_PCM_PLUGIN, test x$build_pcm_plugin = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_COPY, test x$build_pcm_copy = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_LINEAR, test x$build_pcm_linear = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_ROUTE, test x$build_pcm_route = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_MULAW, test x$build_pcm_mulaw = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_ALAW, test x$build_pcm_alaw = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_ADPCM, test x$build_pcm_adpcm = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_RATE, test x$build_pcm_rate = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_PLUG, test x$build_pcm_plug = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_MULTI, test x$build_pcm_multi = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_SHM, test x$build_pcm_shm = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_FILE, test x$build_pcm_file = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_NULL, test x$build_pcm_null = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_EMPTY, test x$build_pcm_empty = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_SHARE, test x$build_pcm_share = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_METER, test x$build_pcm_meter = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_HOOKS, test x$build_pcm_hooks = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_LFLOAT, test x$build_pcm_lfloat = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_LADSPA, test x$build_pcm_ladspa = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_DMIX, test x$build_pcm_dmix = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_DSHARE, test x$build_pcm_dshare = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_DSNOOP, test x$build_pcm_dsnoop = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_ASYM, test x$build_pcm_asym = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_IEC958, test x$build_pcm_iec958 = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_SOFTVOL, test x$build_pcm_softvol = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_EXTPLUG, test x$build_pcm_extplug = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_IOPLUG, test x$build_pcm_ioplug = xyes)
-AM_CONDITIONAL(BUILD_PCM_PLUGIN_MMAP_EMUL, test x$build_pcm_mmap_emul = xyes)
+if test "$gcc_have_atomics" != "yes"; then
+  build_pcm_meter="no"
+fi
+
+AM_CONDITIONAL([BUILD_PCM_PLUGIN], [test x$build_pcm_plugin = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_COPY], [test x$build_pcm_copy = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_LINEAR], [test x$build_pcm_linear = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_ROUTE], [test x$build_pcm_route = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_MULAW], [test x$build_pcm_mulaw = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_ALAW], [test x$build_pcm_alaw = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_ADPCM], [test x$build_pcm_adpcm = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_RATE], [test x$build_pcm_rate = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_PLUG], [test x$build_pcm_plug = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_MULTI], [test x$build_pcm_multi = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_SHM], [test x$build_pcm_shm = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_FILE], [test x$build_pcm_file = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_NULL], [test x$build_pcm_null = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_EMPTY], [test x$build_pcm_empty = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_SHARE], [test x$build_pcm_share = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_METER], [test x$build_pcm_meter = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_HOOKS], [test x$build_pcm_hooks = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_LFLOAT], [test x$build_pcm_lfloat = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_LADSPA], [test x$build_pcm_ladspa = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_DMIX], [test x$build_pcm_dmix = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_DSHARE], [test x$build_pcm_dshare = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_DSNOOP], [test x$build_pcm_dsnoop = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_ASYM], [test x$build_pcm_asym = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_IEC958], [test x$build_pcm_iec958 = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_SOFTVOL], [test x$build_pcm_softvol = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_EXTPLUG], [test x$build_pcm_extplug = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_IOPLUG], [test x$build_pcm_ioplug = xyes])
+AM_CONDITIONAL([BUILD_PCM_PLUGIN_MMAP_EMUL], [test x$build_pcm_mmap_emul = xyes])
 
 dnl Defines for plug plugin
 if test "$build_pcm_rate" = "yes"; then
@@ -606,9 +603,9 @@ for p in $ctl_plugins; do
   done
 done
 
-AM_CONDITIONAL(BUILD_CTL_PLUGIN, test x$build_ctl_plugin = xyes)
-AM_CONDITIONAL(BUILD_CTL_PLUGIN_SHM, test x$build_ctl_shm = xyes)
-AM_CONDITIONAL(BUILD_CTL_PLUGIN_EXT, test x$build_ctl_ext = xyes)
+AM_CONDITIONAL([BUILD_CTL_PLUGIN], [test x$build_ctl_plugin = xyes])
+AM_CONDITIONAL([BUILD_CTL_PLUGIN_SHM], [test x$build_ctl_shm = xyes])
+AM_CONDITIONAL([BUILD_CTL_PLUGIN_EXT], [test x$build_ctl_ext = xyes])
 
 dnl Create ctl plugin symbol list for static library
 rm -f "$srcdir"/src/control/ctl_symbols_list.c
@@ -618,6 +615,20 @@ for t in $CTL_PLUGIN_LIST; do
     echo \&_snd_module_control_$t, >> "$srcdir"/src/control/ctl_symbols_list.c
   fi
 done
+
+dnl Max number of cards
+AC_MSG_CHECKING(for max number of cards)
+AC_ARG_WITH(max-cards,
+  AS_HELP_STRING([--with-max-cards], [Specify the max number of cards (default = 32)]),
+  [ max_cards="$withval" ], [ max_cards="32" ])
+AC_MSG_RESULT([$max_cards])
+
+if test "$max_cards" -lt 1; then
+   AC_ERROR([Invalid max cards $max_cards])
+elif test "$max_cards" -gt 256; then
+   AC_ERROR([Invalid max cards $max_cards])
+fi
+AC_DEFINE_UNQUOTED(SND_MAX_CARDS, $max_cards, [Max number of cards])
 
 dnl Make a symlink for inclusion of alsa/xxx.h
 if test ! -L "$srcdir"/include/alsa ; then
@@ -632,10 +643,16 @@ AC_OUTPUT(Makefile doc/Makefile doc/pictures/Makefile doc/doxygen.cfg \
 	  src/pcm/Makefile src/pcm/scopes/Makefile \
 	  src/rawmidi/Makefile src/timer/Makefile \
           src/hwdep/Makefile src/seq/Makefile src/ucm/Makefile \
-          src/compat/Makefile src/alisp/Makefile \
+          src/alisp/Makefile \
 	  src/conf/Makefile src/conf/alsa.conf.d/Makefile \
 	  src/conf/cards/Makefile \
 	  src/conf/pcm/Makefile \
+	  src/conf/ucm/Makefile \
+	  src/conf/ucm/DAISY-I2S/Makefile \
+	  src/conf/ucm/PandaBoard/Makefile \
+	  src/conf/ucm/PandaBoardES/Makefile \
+	  src/conf/ucm/SDP4430/Makefile \
+	  src/conf/ucm/tegraalc5632/Makefile \
 	  modules/Makefile modules/mixer/Makefile modules/mixer/simple/Makefile \
 	  alsalisp/Makefile aserver/Makefile \
 	  test/Makefile test/lsb/Makefile \
@@ -644,6 +661,35 @@ AC_OUTPUT(Makefile doc/Makefile doc/pictures/Makefile doc/doxygen.cfg \
 dnl Create asoundlib.h dynamically according to configure options
 echo "Creating asoundlib.h..."
 cp "$srcdir"/include/asoundlib-head.h include/asoundlib.h
+test "$ac_cv_header_endian_h" = "yes" && echo "#include <endian.h>" >> include/asoundlib.h
+if test "$ac_cv_header_sys_endian_h" = "yes"; then
+cat >> include/asoundlib.h <<EOF
+#include <sys/endian.h>
+#ifndef __BYTE_ORDER
+#define __BYTE_ORDER BYTE_ORDER
+#endif
+#ifndef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN LITTLE_ENDIAN
+#endif
+#ifndef __BIG_ENDIAN
+#define __BIG_ENDIAN BIG_ENDIAN
+#endif
+EOF
+fi
+cat >> include/asoundlib.h <<EOF
+
+#ifndef __GNUC__
+#define __inline__ inline
+#endif
+
+#include <alsa/asoundef.h>
+#include <alsa/version.h>
+#include <alsa/global.h>
+#include <alsa/input.h>
+#include <alsa/output.h>
+#include <alsa/error.h>
+#include <alsa/conf.h>
+EOF
 test "$build_pcm" = "yes" && echo "#include <alsa/pcm.h>" >> include/asoundlib.h
 test "$build_rawmidi" = "yes" && echo "#include <alsa/rawmidi.h>" >> include/asoundlib.h
 test "$build_pcm" = "yes" && echo "#include <alsa/timer.h>" >> include/asoundlib.h

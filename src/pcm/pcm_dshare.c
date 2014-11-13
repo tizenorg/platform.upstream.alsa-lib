@@ -470,10 +470,11 @@ static int snd_pcm_dshare_close(snd_pcm_t *pcm)
  		snd_pcm_direct_server_discard(dshare);
  	if (dshare->client)
  		snd_pcm_direct_client_discard(dshare);
-	if (snd_pcm_direct_shm_discard(dshare))
-		snd_pcm_direct_semaphore_discard(dshare);
-	else
-		snd_pcm_direct_semaphore_up(dshare, DIRECT_IPC_SEM_CLIENT);
+	if (snd_pcm_direct_shm_discard(dshare)) {
+		if (snd_pcm_direct_semaphore_discard(dshare))
+			snd_pcm_direct_semaphore_final(dshare, DIRECT_IPC_SEM_CLIENT);
+	} else
+		snd_pcm_direct_semaphore_final(dshare, DIRECT_IPC_SEM_CLIENT);
 	free(dshare->bindings);
 	pcm->private_data = NULL;
 	free(dshare);
@@ -543,6 +544,7 @@ static int snd_pcm_dshare_htimestamp(snd_pcm_t *pcm,
 			break;
 		*avail = avail1;
 		*tstamp = snd_pcm_hw_fast_tstamp(dshare->spcm);
+		ok = 1;
 	}
 	return 0;
 }
@@ -573,6 +575,8 @@ static const snd_pcm_ops_t snd_pcm_dshare_ops = {
 	.async = snd_pcm_direct_async,
 	.mmap = snd_pcm_direct_mmap,
 	.munmap = snd_pcm_direct_munmap,
+	.get_chmap = snd_pcm_direct_get_chmap,
+	.set_chmap = snd_pcm_direct_set_chmap,
 };
 
 static const snd_pcm_fast_ops_t snd_pcm_dshare_fast_ops = {
@@ -788,7 +792,7 @@ int snd_pcm_dshare_open(snd_pcm_t **pcmp, const char *name,
 
 	pcm->poll_fd = dshare->poll_fd;
 	pcm->poll_events = POLLIN;	/* it's different than other plugins */
-		
+	pcm->monotonic = spcm->monotonic;
 	pcm->mmap_rw = 1;
 	snd_pcm_set_hw_ptr(pcm, &dshare->hw_ptr, -1, 0);
 	snd_pcm_set_appl_ptr(pcm, &dshare->appl_ptr, -1, 0);

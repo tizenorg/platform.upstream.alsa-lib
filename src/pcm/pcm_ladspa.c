@@ -612,8 +612,7 @@ static int snd_pcm_ladspa_allocate_instances(snd_pcm_t *pcm, snd_pcm_ladspa_t *l
 {
 	struct list_head *list, *pos;
 	unsigned int depth, idx, count;
-        unsigned int in_channel, out_channel;
-        unsigned int in_channels, out_channels;
+        unsigned int in_channels;
 	unsigned int in_ports, out_ports;
 	snd_pcm_ladspa_instance_t *instance = NULL;
 	int err;
@@ -622,11 +621,8 @@ static int snd_pcm_ladspa_allocate_instances(snd_pcm_t *pcm, snd_pcm_ladspa_t *l
 	in_channels = ladspa->channels > 0 ? ladspa->channels :
 	              (pcm->stream == SND_PCM_STREAM_PLAYBACK ? pcm->channels : ladspa->plug.gen.slave->channels);
 	depth = 0;
-	out_channels = 0;
 	list_for_each(pos, list) {
 		snd_pcm_ladspa_plugin_t *plugin = list_entry(pos, snd_pcm_ladspa_plugin_t, list);
-		if (pos->next == list)	/* last entry */
-		        out_channels = pcm->stream == SND_PCM_STREAM_PLAYBACK ? ladspa->plug.gen.slave->channels : pcm->channels;
                 in_ports = snd_pcm_ladspa_count_ports(plugin, LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO);
                 out_ports = snd_pcm_ladspa_count_ports(plugin, LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO);
 		count = 1;
@@ -636,8 +632,6 @@ static int snd_pcm_ladspa_allocate_instances(snd_pcm_t *pcm, snd_pcm_ladspa_t *l
                         else
                                 plugin->policy = SND_PCM_LADSPA_POLICY_NONE;
                 }
-                in_channel = 0;
-                out_channel = 0;
         	for (idx = 0; idx < count; idx++) {
 			instance = (snd_pcm_ladspa_instance_t *)calloc(1, sizeof(snd_pcm_ladspa_instance_t));
 			if (instance == NULL)
@@ -651,8 +645,6 @@ static int snd_pcm_ladspa_allocate_instances(snd_pcm_t *pcm, snd_pcm_ladspa_t *l
 				return -EINVAL;
 			}
 			list_add_tail(&instance->list, &plugin->instances);
-			if (plugin->desc->activate)
-				plugin->desc->activate(instance->handle);
 			if (plugin->policy == SND_PCM_LADSPA_POLICY_DUPLICATE) {
 				err = snd_pcm_ladspa_connect_plugin_duplicate(plugin, &plugin->input, &plugin->output, instance, idx);
 				if (err < 0) {
@@ -670,6 +662,8 @@ static int snd_pcm_ladspa_allocate_instances(snd_pcm_t *pcm, snd_pcm_ladspa_t *l
 			assert(err >= 0);
 			err = snd_pcm_ladspa_connect_controls(plugin, &plugin->output, instance);
 			assert(err >= 0);
+			if (plugin->desc->activate)
+				plugin->desc->activate(instance->handle);
 		}
 		err = snd_pcm_ladspa_check_connect(plugin, &plugin->input, &instance->input, depth);
 		if (err < 0)
@@ -1084,6 +1078,9 @@ static const snd_pcm_ops_t snd_pcm_ladspa_ops = {
 	.async = snd_pcm_generic_async,
 	.mmap = snd_pcm_generic_mmap,
 	.munmap = snd_pcm_generic_munmap,
+	.query_chmaps = snd_pcm_generic_query_chmaps,
+	.get_chmap = snd_pcm_generic_get_chmap,
+	.set_chmap = snd_pcm_generic_set_chmap,
 };
 
 static int snd_pcm_ladspa_check_file(snd_pcm_ladspa_plugin_t * const plugin,
@@ -1329,7 +1326,7 @@ static int snd_pcm_ladspa_parse_bindings(snd_pcm_ladspa_plugin_t *lplug,
 			count = (unsigned int)(channel + 1);
 	}
 	if (count > 0) {
-		array = (unsigned int *)calloc(count, sizeof(unsigned int));
+		array = (unsigned int *)malloc(count * sizeof(unsigned int));
 		if (! array)
 			return -ENOMEM;
 		memset(array, 0xff, count * sizeof(unsigned int));

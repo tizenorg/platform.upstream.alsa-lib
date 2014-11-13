@@ -561,58 +561,6 @@ snd_pcm_rate_read_areas1(snd_pcm_t *pcm,
 		   pcm->channels, rate);
 }
 
-static inline snd_pcm_sframes_t snd_pcm_rate_move_applptr(snd_pcm_t *pcm, snd_pcm_sframes_t frames)
-{
-	snd_pcm_rate_t *rate = pcm->private_data;
-	snd_pcm_uframes_t orig_appl_ptr, appl_ptr = rate->appl_ptr, slave_appl_ptr;
-	snd_pcm_sframes_t diff, ndiff;
-	snd_pcm_t *slave = rate->gen.slave;
-
-	orig_appl_ptr = rate->appl_ptr;
-	if (frames > 0)
-		snd_pcm_mmap_appl_forward(pcm, frames);
-	else
-		snd_pcm_mmap_appl_backward(pcm, -frames);
-	slave_appl_ptr =
-		(appl_ptr / pcm->period_size) * rate->gen.slave->period_size;
-	diff = slave_appl_ptr - *slave->appl.ptr;
-	if (diff < -(snd_pcm_sframes_t)(slave->boundary / 2)) {
-		diff = (slave->boundary - *slave->appl.ptr) + slave_appl_ptr;
-	} else if (diff > (snd_pcm_sframes_t)(slave->boundary / 2)) {
-		diff = -((slave->boundary - slave_appl_ptr) + *slave->appl.ptr);
-	}
-	if (diff == 0)
-		return frames;
-	if (diff > 0) {
-		ndiff = snd_pcm_forward(rate->gen.slave, diff);
-	} else {
-		ndiff = snd_pcm_rewind(rate->gen.slave, diff);
-	}
-	if (ndiff < 0)
-		return diff;
-	slave_appl_ptr = *slave->appl.ptr;
-	rate->appl_ptr =
-		(slave_appl_ptr / rate->gen.slave->period_size) * pcm->period_size +
-		orig_appl_ptr % pcm->period_size;
-	if (pcm->stream == SND_PCM_STREAM_PLAYBACK)
-		rate->appl_ptr += rate->ops.input_frames(rate->obj, slave_appl_ptr % rate->gen.slave->period_size);
-	else
-		rate->appl_ptr += rate->ops.output_frames(rate->obj, slave_appl_ptr % rate->gen.slave->period_size);
-
-	diff = orig_appl_ptr - rate->appl_ptr;
-	if (diff < -(snd_pcm_sframes_t)(slave->boundary / 2)) {
-		diff = (slave->boundary - rate->appl_ptr) + orig_appl_ptr;
-	} else if (diff > (snd_pcm_sframes_t)(slave->boundary / 2)) {
-		diff = -((slave->boundary - orig_appl_ptr) + rate->appl_ptr);
-	}
-	if (frames < 0)
-		diff = -diff;
-
-	rate->last_commit_ptr = rate->appl_ptr - rate->appl_ptr % pcm->period_size;
-
-	return diff;
-}
-
 static inline void snd_pcm_rate_sync_hwptr(snd_pcm_t *pcm)
 {
 	snd_pcm_rate_t *rate = pcm->private_data;
@@ -689,36 +637,26 @@ static int snd_pcm_rate_reset(snd_pcm_t *pcm)
 	return 0;
 }
 
-static snd_pcm_sframes_t snd_pcm_rate_rewind(snd_pcm_t *pcm, snd_pcm_uframes_t frames)
+static snd_pcm_sframes_t snd_pcm_rate_rewindable(snd_pcm_t *pcm ATTRIBUTE_UNUSED)
 {
-	snd_pcm_rate_t *rate = pcm->private_data;
-	snd_pcm_sframes_t n = snd_pcm_mmap_hw_avail(pcm);
-
-	if ((snd_pcm_uframes_t)n > frames)
-		frames = n;
-	if (frames == 0)
-		return 0;
-	
-	snd_atomic_write_begin(&rate->watom);
-	n = snd_pcm_rate_move_applptr(pcm, -frames);
-	snd_atomic_write_end(&rate->watom);
-	return n;
+	return 0;
 }
 
-static snd_pcm_sframes_t snd_pcm_rate_forward(snd_pcm_t *pcm, snd_pcm_uframes_t frames)
+static snd_pcm_sframes_t snd_pcm_rate_forwardable(snd_pcm_t *pcm ATTRIBUTE_UNUSED)
 {
-	snd_pcm_rate_t *rate = pcm->private_data;
-	snd_pcm_sframes_t n = snd_pcm_mmap_avail(pcm);
+	return 0;
+}
 
-	if ((snd_pcm_uframes_t)n > frames)
-		frames = n;
-	if (frames == 0)
-		return 0;
-	
-	snd_atomic_write_begin(&rate->watom);
-	n = snd_pcm_rate_move_applptr(pcm, frames);
-	snd_atomic_write_end(&rate->watom);
-	return n;
+static snd_pcm_sframes_t snd_pcm_rate_rewind(snd_pcm_t *pcm ATTRIBUTE_UNUSED,
+                                             snd_pcm_uframes_t frames ATTRIBUTE_UNUSED)
+{
+        return 0;
+}
+
+static snd_pcm_sframes_t snd_pcm_rate_forward(snd_pcm_t *pcm ATTRIBUTE_UNUSED,
+                                              snd_pcm_uframes_t frames ATTRIBUTE_UNUSED)
+{
+        return 0;
 }
 
 static int snd_pcm_rate_commit_area(snd_pcm_t *pcm, snd_pcm_rate_t *rate,
@@ -1221,7 +1159,9 @@ static const snd_pcm_fast_ops_t snd_pcm_rate_fast_ops = {
 	.drop = snd_pcm_generic_drop,
 	.drain = snd_pcm_rate_drain,
 	.pause = snd_pcm_generic_pause,
+	.rewindable = snd_pcm_rate_rewindable,
 	.rewind = snd_pcm_rate_rewind,
+	.forwardable = snd_pcm_rate_forwardable,
 	.forward = snd_pcm_rate_forward,
 	.resume = snd_pcm_generic_resume,
 	.writei = snd_pcm_mmap_writei,
@@ -1234,6 +1174,7 @@ static const snd_pcm_fast_ops_t snd_pcm_rate_fast_ops = {
 	.poll_descriptors_count = snd_pcm_generic_poll_descriptors_count,
 	.poll_descriptors = snd_pcm_generic_poll_descriptors,
 	.poll_revents = snd_pcm_rate_poll_revents,
+	.may_wait_for_avail_min = snd_pcm_generic_may_wait_for_avail_min,
 };
 
 static const snd_pcm_ops_t snd_pcm_rate_ops = {
@@ -1249,6 +1190,9 @@ static const snd_pcm_ops_t snd_pcm_rate_ops = {
 	.async = snd_pcm_generic_async,
 	.mmap = snd_pcm_generic_mmap,
 	.munmap = snd_pcm_generic_munmap,
+	.query_chmaps = snd_pcm_generic_query_chmaps,
+	.get_chmap = snd_pcm_generic_get_chmap,
+	.set_chmap = snd_pcm_generic_set_chmap,
 };
 
 /**
@@ -1391,13 +1335,13 @@ int snd_pcm_rate_open(snd_pcm_t **pcmp, const char *name,
 		}
 	} else {
 		SNDERR("Invalid type for rate converter");
-		snd_pcm_close(pcm);
+		snd_pcm_free(pcm);
 		free(rate);
 		return -EINVAL;
 	}
 	if (err < 0) {
 		SNDERR("Cannot find rate converter");
-		snd_pcm_close(pcm);
+		snd_pcm_free(pcm);
 		free(rate);
 		return -ENOENT;
 	}
@@ -1406,7 +1350,7 @@ int snd_pcm_rate_open(snd_pcm_t **pcmp, const char *name,
 	open_func = SND_PCM_RATE_PLUGIN_ENTRY(linear);
 	err = open_func(SND_PCM_RATE_PLUGIN_VERSION, &rate->obj, &rate->ops);
 	if (err < 0) {
-		snd_pcm_close(pcm);
+		snd_pcm_free(pcm);
 		free(rate);
 		return err;
 	}
@@ -1415,7 +1359,7 @@ int snd_pcm_rate_open(snd_pcm_t **pcmp, const char *name,
 	if (! rate->ops.init || ! (rate->ops.convert || rate->ops.convert_s16) ||
 	    ! rate->ops.input_frames || ! rate->ops.output_frames) {
 		SNDERR("Inproper rate plugin %s initialization", type);
-		snd_pcm_close(pcm);
+		snd_pcm_free(pcm);
 		free(rate);
 		return err;
 	}

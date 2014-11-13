@@ -31,6 +31,7 @@
  */
 
 #include "ucm_local.h"
+#include <ctype.h>
 #include <stdarg.h>
 #include <pthread.h>
 
@@ -144,6 +145,7 @@ static int open_ctl(snd_use_case_mgr_t *uc_mgr,
 		free(uc_mgr->ctl_dev);
 		uc_mgr->ctl_dev = NULL;
 		snd_ctl_close(uc_mgr->ctl);
+		uc_mgr->ctl = NULL;
 	
 	}
 	err = snd_ctl_open(ctl, ctl_dev, 0);
@@ -158,9 +160,13 @@ static int open_ctl(snd_use_case_mgr_t *uc_mgr,
 	return 0;
 }
 
-static int execute_cset(snd_ctl_t *ctl, char *cset)
+extern int __snd_ctl_ascii_elem_id_parse(snd_ctl_elem_id_t *dst,
+					 const char *str,
+					 const char **ret_ptr);
+
+static int execute_cset(snd_ctl_t *ctl, const char *cset)
 {
-	char *pos;
+	const char *pos;
 	int err;
 	snd_ctl_elem_id_t *id;
 	snd_ctl_elem_value_t *value;
@@ -170,16 +176,16 @@ static int execute_cset(snd_ctl_t *ctl, char *cset)
 	snd_ctl_elem_value_malloc(&value);
 	snd_ctl_elem_info_malloc(&info);
 
-	pos = strrchr(cset, ' ');
-	if (pos == NULL) {
+	err = __snd_ctl_ascii_elem_id_parse(id, cset, &pos);
+	if (err < 0)
+		goto __fail;
+	while (*pos && isspace(*pos))
+		pos++;
+	if (!*pos) {
 		uc_error("undefined value for cset >%s<", cset);
 		err = -EINVAL;
 		goto __fail;
 	}
-	*pos = '\0';
-	err = snd_ctl_ascii_elem_id_parse(id, cset);
-	if (err < 0)
-		goto __fail;
 	snd_ctl_elem_value_set_id(value, id);
 	snd_ctl_elem_info_set_id(info, id);
 	err = snd_ctl_elem_read(ctl, value);
@@ -188,7 +194,7 @@ static int execute_cset(snd_ctl_t *ctl, char *cset)
 	err = snd_ctl_elem_info(ctl, info);
 	if (err < 0)
 		goto __fail;
-	err = snd_ctl_ascii_value_parse(ctl, value, info, pos + 1);
+	err = snd_ctl_ascii_value_parse(ctl, value, info, pos);
 	if (err < 0)
 		goto __fail;
 	err = snd_ctl_elem_write(ctl, value);
@@ -196,9 +202,6 @@ static int execute_cset(snd_ctl_t *ctl, char *cset)
 		goto __fail;
 	err = 0;
       __fail:
-	if (pos != NULL)
-		*pos = ' ';
-
 	if (id != NULL)
 		free(id);
 	if (value != NULL)
@@ -367,8 +370,10 @@ static int get_list0(struct list_head *list,
 	char *ptr, *str1;
 
 	cnt = alloc_str_list(list, 1, &res);
-	if (cnt <= 0)
+	if (cnt <= 0) {
+		*result = NULL;
 	        return cnt;
+	}
 	*result = (const char **)res;
 	list_for_each(pos, list) {
 		ptr = list_entry_offset(pos, char, offset);
@@ -414,8 +419,10 @@ static int get_list20(struct list_head *list,
 	char *ptr, *str1, *str2;
 
 	cnt = alloc_str_list(list, 2, &res);
-	if (cnt <= 0)
+	if (cnt <= 0) {
+		*result = NULL;
 	        return cnt;
+	}
         *result = (const char **)res;
 	list_for_each(pos, list) {
 		ptr = list_entry_offset(pos, char, offset);
@@ -565,6 +572,34 @@ static struct use_case_modifier *
 	return NULL;
 }
 
+long device_status(snd_use_case_mgr_t *uc_mgr,
+                   const char *device_name)
+{
+        struct use_case_device *dev;
+        struct list_head *pos;
+
+        list_for_each(pos, &uc_mgr->active_devices) {
+                dev = list_entry(pos, struct use_case_device, active_list);
+                if (strcmp(dev->name, device_name) == 0)
+                        return 1;
+        }
+        return 0;
+}
+
+long modifier_status(snd_use_case_mgr_t *uc_mgr,
+                     const char *modifier_name)
+{
+        struct use_case_modifier *mod;
+        struct list_head *pos;
+
+        list_for_each(pos, &uc_mgr->active_modifiers) {
+                mod = list_entry(pos, struct use_case_modifier, active_list);
+                if (strcmp(mod->name, modifier_name) == 0)
+                        return 1;
+        }
+        return 0;
+}
+
 /**
  * \brief Set verb
  * \param uc_mgr Use case manager
@@ -607,6 +642,9 @@ static int set_modifier(snd_use_case_mgr_t *uc_mgr,
 	struct list_head *seq;
 	int err;
 
+	if (modifier_status(uc_mgr, modifier->name) == enable)
+		return 0;
+
 	if (enable) {
 		seq = &modifier->enable_list;
 	} else {
@@ -638,6 +676,9 @@ static int set_device(snd_use_case_mgr_t *uc_mgr,
 	struct list_head *seq;
 	int err;
 
+        if (device_status(uc_mgr, device->name) == enable)
+		return 0;
+
 	if (enable) {
 		seq = &device->enable_list;
 	} else {
@@ -661,42 +702,42 @@ static int set_device(snd_use_case_mgr_t *uc_mgr,
  * \param card_name name of card to open
  * \return zero on success, otherwise a negative error code
  */
-int snd_use_case_mgr_open(snd_use_case_mgr_t **mgr,
+int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr,
 			  const char *card_name)
 {
-	snd_use_case_mgr_t *uc_mgr;
+	snd_use_case_mgr_t *mgr;
 	int err;
 
 	/* create a new UCM */
-	uc_mgr = calloc(1, sizeof(snd_use_case_mgr_t));
-	if (uc_mgr == NULL)
+	mgr = calloc(1, sizeof(snd_use_case_mgr_t));
+	if (mgr == NULL)
 		return -ENOMEM;
-	INIT_LIST_HEAD(&uc_mgr->verb_list);
-	INIT_LIST_HEAD(&uc_mgr->default_list);
-	INIT_LIST_HEAD(&uc_mgr->value_list);
-	INIT_LIST_HEAD(&uc_mgr->active_modifiers);
-	INIT_LIST_HEAD(&uc_mgr->active_devices);
-	pthread_mutex_init(&uc_mgr->mutex, NULL);
+	INIT_LIST_HEAD(&mgr->verb_list);
+	INIT_LIST_HEAD(&mgr->default_list);
+	INIT_LIST_HEAD(&mgr->value_list);
+	INIT_LIST_HEAD(&mgr->active_modifiers);
+	INIT_LIST_HEAD(&mgr->active_devices);
+	pthread_mutex_init(&mgr->mutex, NULL);
 
-	uc_mgr->card_name = strdup(card_name);
-	if (uc_mgr->card_name == NULL) {
-		free(uc_mgr);
+	mgr->card_name = strdup(card_name);
+	if (mgr->card_name == NULL) {
+		free(mgr);
 		return -ENOMEM;
 	}
 
 	/* get info on use_cases and verify against card */
-	err = import_master_config(uc_mgr);
+	err = import_master_config(mgr);
 	if (err < 0) {
 		uc_error("error: failed to import %s use case configuration %d",
 			card_name, err);
 		goto err;
 	}
 
-	*mgr = uc_mgr;
+	*uc_mgr = mgr;
 	return 0;
 
 err:
-	uc_mgr_free(uc_mgr);
+	uc_mgr_free(mgr);
 	return err;
 }
 
@@ -932,10 +973,12 @@ static int get_conflicting_device_list(snd_use_case_mgr_t *uc_mgr,
 	return get_supcon_device_list(uc_mgr, list, name, DEVLIST_CONFLICTING);
 }
 
+#ifndef DOC_HIDDEN
 struct myvalue {
         struct list_head list;
         char *value;
 };
+#endif
 
 static int add_values(struct list_head *list,
                       const char *identifier,
@@ -1316,34 +1359,6 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
         return err;
 }
 
-long device_status(snd_use_case_mgr_t *uc_mgr,
-                   const char *device_name)
-{
-        struct use_case_device *dev;
-        struct list_head *pos;
-        
-        list_for_each(pos, &uc_mgr->active_devices) {
-                dev = list_entry(pos, struct use_case_device, active_list);
-                if (strcmp(dev->name, device_name) == 0)
-                        return 1;
-        }
-        return 0;
-}
-
-long modifier_status(snd_use_case_mgr_t *uc_mgr,
-                     const char *modifier_name)
-{
-        struct use_case_modifier *mod;
-        struct list_head *pos;
-        
-        list_for_each(pos, &uc_mgr->active_modifiers) {
-                mod = list_entry(pos, struct use_case_modifier, active_list);
-                if (strcmp(mod->name, modifier_name) == 0)
-                        return 1;
-        }
-        return 0;
-}
-
 
 /**
  * \brief Get current - integer
@@ -1632,7 +1647,8 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
                 		goto __end;
                         }
                 } else {
-                        str = NULL;
+                        err = -EINVAL;
+                        goto __end;
                 }
                 if (check_identifier(identifier, "_swdev"))
                         err = switch_device(uc_mgr, str, value);

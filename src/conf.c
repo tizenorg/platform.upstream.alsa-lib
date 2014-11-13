@@ -427,8 +427,8 @@ beginning:</P>
 #ifndef DOC_HIDDEN
 
 #ifdef HAVE_LIBPTHREAD
-static pthread_mutex_t snd_config_update_mutex =
-				PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static pthread_mutex_t snd_config_update_mutex;
+static pthread_once_t snd_config_update_mutex_once = PTHREAD_ONCE_INIT;
 #endif
 
 struct _snd_config {
@@ -472,8 +472,19 @@ typedef struct {
 
 #ifdef HAVE_LIBPTHREAD
 
+static void snd_config_init_mutex(void)
+{
+	pthread_mutexattr_t attr;
+
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&snd_config_update_mutex, &attr);
+	pthread_mutexattr_destroy(&attr);
+}
+
 static inline void snd_config_lock(void)
 {
+	pthread_once(&snd_config_update_mutex_once, snd_config_init_mutex);
 	pthread_mutex_lock(&snd_config_update_mutex);
 }
 
@@ -496,7 +507,7 @@ static int safe_strtoll(const char *str, long long *val)
 	if (!*str)
 		return -EINVAL;
 	errno = 0;
-	if (sscanf(str, "%Li%n", &v, &endidx) < 1)
+	if (sscanf(str, "%lli%n", &v, &endidx) < 1)
 		return -EINVAL;
 	if (str[endidx])
 		return -EINVAL;
@@ -1378,7 +1389,7 @@ static int _snd_config_save_node_value(snd_config_t *n, snd_output_t *out,
 		snd_output_printf(out, "%ld", n->u.integer);
 		break;
 	case SND_CONFIG_TYPE_INTEGER64:
-		snd_output_printf(out, "%Ld", n->u.integer64);
+		snd_output_printf(out, "%lld", n->u.integer64);
 		break;
 	case SND_CONFIG_TYPE_REAL:
 		snd_output_printf(out, "%-16g", n->u.real);
@@ -2630,7 +2641,7 @@ int snd_config_get_ascii(const snd_config_t *config, char **ascii)
 		{
 			char res[32];
 			int err;
-			err = snprintf(res, sizeof(res), "%Li", config->u.integer64);
+			err = snprintf(res, sizeof(res), "%lli", config->u.integer64);
 			if (err < 0 || err == sizeof(res)) {
 				assert(0);
 				return -ENOMEM;
@@ -3505,7 +3516,14 @@ int snd_config_hook_load(snd_config_t *root, snd_config_t *config, snd_config_t 
 			struct dirent **namelist;
 			int n;
 
-			n = scandir(fi[idx].name, &namelist, config_filename_filter, versionsort);
+#ifndef DOC_HIDDEN
+#ifdef _GNU_SOURCE
+#define SORTFUNC	versionsort
+#else
+#define SORTFUNC	alphasort
+#endif
+#endif
+			n = scandir(fi[idx].name, &namelist, config_filename_filter, SORTFUNC);
 			if (n > 0) {
 				int j;
 				err = 0;
@@ -3525,7 +3543,7 @@ int snd_config_hook_load(snd_config_t *root, snd_config_t *config, snd_config_t 
 				if (err < 0)
 					goto _err;
 			}
-		} else if (config_file_open(root, fi[idx].name) < 0)
+		} else if ((err = config_file_open(root, fi[idx].name)) < 0)
 			goto _err;
 	}
 	*dst = NULL;
