@@ -1,7 +1,7 @@
 Name:           alsa-lib
 Version:        1.0.28
-Release:        1
-License:        LGPL-2.0+
+Release:        2
+License:        LGPL-2.1+
 Summary:        The Advanced Linux Sound Architecture (ALSA) library
 Url:            http://www.alsa-project.org/
 Group:          System/Audio
