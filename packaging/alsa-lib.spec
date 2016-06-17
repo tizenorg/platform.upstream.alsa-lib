@@ -1,6 +1,6 @@
 Name:           alsa-lib
 Version:        1.0.28
-Release:        2
+Release:        3
 License:        LGPL-2.1+
 Summary:        The Advanced Linux Sound Architecture (ALSA) library
 Url:            http://www.alsa-project.org/
@@ -42,7 +42,9 @@ cp %{SOURCE1001} .
     --disable-alisp \
     --disable-python \
     --with-gnu-ld \
-    --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug,empty,hooks,route,multi,softvol,file,iec958,null,shm
+    --disable-rawmidi \
+    --disable-seq \
+    --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug,null
 
 make %{?_smp_mflags}
 
