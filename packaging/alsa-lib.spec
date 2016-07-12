@@ -42,7 +42,7 @@ cp %{SOURCE1001} .
     --disable-alisp \
     --disable-python \
     --with-gnu-ld \
-    --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug,empty,hooks,route,multi,softvol,file,iec958,null,shm
+    --with-pcm-plugins=rate,linear,plug,dmix,dsnoop,asym,mmap,ioplug,null
 
 make %{?_smp_mflags}
 
